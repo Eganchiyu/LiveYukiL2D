@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import json
 import mimetypes
@@ -18,24 +17,72 @@ except ImportError as exc:
 ROOT = Path(__file__).resolve().parent
 MODELS_DIR = ROOT / "models"
 FRONTEND_DIR = ROOT / "frontend" / "minimal" / "dist"
+CONFIG_PATH = ROOT / "config.json"
 HOST = "127.0.0.1"
 PORT = 18765
 
 CLIENTS: set[web.WebSocketResponse] = set()
 
-YUKI_MODEL_INFO: dict[str, Any] = {
-    "name": "Yuki",
-    "url": f"http://{HOST}:{PORT}/models/Yuki/Yuki.model3.json",
-    "kScale": 1.0,
-    "initialXshift": 0,
-    "initialYshift": 0,
-    "idleMotionGroupName": "Idle",
-    "defaultEmotion": 0,
-    "emotionMap": {"neutral": 0},
-    "tapMotions": {},
-    "pointerInteractive": True,
-    "scrollToResize": True,
+DEFAULT_CONFIG: dict[str, Any] = {
+    "desktopPet": {
+        "enabled": True,
+        "width": 420,
+        "height": 640,
+        "x": None,
+        "y": None,
+        "transparent": True,
+        "frameless": True,
+        "alwaysOnTop": True,
+        "resizable": True,
+        "mousePassthrough": True,
+        "lookAtMouse": True,
+    },
+    "model": {
+        "kScale": 1.0,
+        "scrollToResize": True,
+    },
 }
+
+
+def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    result = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def load_config() -> dict[str, Any]:
+    if not CONFIG_PATH.exists():
+        return DEFAULT_CONFIG
+    try:
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"config.json 格式错误：{exc}") from exc
+    return deep_merge(DEFAULT_CONFIG, data)
+
+
+def get_yuki_model_info() -> dict[str, Any]:
+    config = load_config()
+    model_config = config.get("model", {})
+    pet_config = config.get("desktopPet", {})
+    return {
+        "name": "Yuki",
+        "url": f"http://{HOST}:{PORT}/models/Yuki/Yuki.model3.json",
+        "kScale": model_config.get("kScale", 1.0),
+        "initialXshift": 0,
+        "initialYshift": 0,
+        "idleMotionGroupName": "Idle",
+        "defaultEmotion": 0,
+        "emotionMap": {"neutral": 0},
+        "tapMotions": {},
+        "pointerInteractive": True,
+        "scrollToResize": model_config.get("scrollToResize", True),
+        "lookAtMouse": pet_config.get("lookAtMouse", True),
+        "desktopPet": pet_config,
+    }
 
 
 def json_response(data: Any, status: int = 200) -> web.Response:
@@ -75,7 +122,6 @@ async def model_static(request: web.Request) -> web.StreamResponse:
     if not path.exists() or not path.is_file():
         raise web.HTTPNotFound(text=f"not found: {rel}")
 
-    # aiohttp sometimes does not know .moc3/.model3.json; set sane defaults.
     ctype, _ = mimetypes.guess_type(str(path))
     if path.suffix == ".moc3":
         ctype = "application/octet-stream"
@@ -104,7 +150,7 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     CLIENTS.add(ws)
     print(f"[ws] client connected, total={len(CLIENTS)}")
 
-    await ws.send_str(json.dumps({"type": "set-model", "model_info": YUKI_MODEL_INFO}, ensure_ascii=False))
+    await ws.send_str(json.dumps({"type": "set-model", "model_info": get_yuki_model_info()}, ensure_ascii=False))
     await ws.send_str(json.dumps({"type": "say", "text": "Yuki 模型加载中..."}, ensure_ascii=False))
 
     async for msg in ws:
@@ -118,9 +164,14 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     return ws
 
 
+async def api_config(_: web.Request) -> web.Response:
+    return json_response(load_config())
+
+
 async def api_model(_: web.Request) -> web.Response:
-    await broadcast({"type": "set-model", "model_info": YUKI_MODEL_INFO})
-    return json_response({"ok": True, "model_info": YUKI_MODEL_INFO, "clients": len(CLIENTS)})
+    model_info = get_yuki_model_info()
+    await broadcast({"type": "set-model", "model_info": model_info})
+    return json_response({"ok": True, "model_info": model_info, "clients": len(CLIENTS)})
 
 
 async def api_say(request: web.Request) -> web.Response:
@@ -175,6 +226,7 @@ def create_app() -> web.Application:
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_get("/ws", websocket_handler)
+    app.router.add_get("/api/config", api_config)
     app.router.add_get("/api/model", api_model)
     app.router.add_get("/api/say", api_say)
     app.router.add_post("/api/audio", api_audio)
@@ -183,10 +235,10 @@ def create_app() -> web.Application:
     return app
 
 
-def main() -> None:
+def main(handle_signals: bool = True) -> None:
     print(f"LiveYukiL2D server: http://{HOST}:{PORT}")
-    print(f"Serving model: {YUKI_MODEL_INFO['url']}")
-    web.run_app(create_app(), host=HOST, port=PORT)
+    print(f"Serving model: {get_yuki_model_info()['url']}")
+    web.run_app(create_app(), host=HOST, port=PORT, handle_signals=handle_signals)
 
 
 if __name__ == "__main__":

@@ -101,7 +101,9 @@ export class LAppDelegate {
       // 注册鼠标相关回调函数
       canvas!.addEventListener('mousedown', onClickBegan, { passive: true });
       canvas!.addEventListener('mousemove', onMouseMoved, { passive: true });
-      canvas!.addEventListener('mouseup', onClickEnded, { passive: true });
+      canvas!.addEventListener('wheel', onMouseWheel, { passive: false });
+      window.addEventListener('mousemove', onGlobalMouseMoved, { passive: true });
+      window.addEventListener('mouseup', onClickEnded, { passive: true });
     }
 
     // AppViewの初期化
@@ -189,7 +191,7 @@ export class LAppDelegate {
 
       // 画面の初期化
       // 屏幕初始化
-      gl!.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl!.clearColor(0.0, 0.0, 0.0, 0.0);
 
       // 深度テストを有効化
       // 启用深度测试
@@ -201,8 +203,7 @@ export class LAppDelegate {
 
       // カラーバッファや深度バッファをクリアする
       // 清除颜色缓冲区和深度缓冲区
-      // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      gl!.clear(gl!.DEPTH_BUFFER_BIT);
+      gl!.clear(gl!.COLOR_BUFFER_BIT | gl!.DEPTH_BUFFER_BIT);
 
       gl!.clearDepth(1.0);
 
@@ -381,16 +382,41 @@ function onMouseMoved(e: MouseEvent): void {
     return;
   }
 
-  if (!LAppDelegate.getInstance()._view) {
+  moveModelDragToPointer(e.clientX, e.clientY);
+}
+
+function onGlobalMouseMoved(e: MouseEvent): void {
+  if (!LAppDefine.LookAtMouse || LAppDelegate.getInstance()._captured) {
+    return;
+  }
+
+  moveModelDragToPointer(e.clientX, e.clientY);
+}
+
+function moveModelDragToPointer(clientX: number, clientY: number): void {
+  const view = LAppDelegate.getInstance()._view;
+  if (!view || !canvas) {
     LAppPal.printMessage('view notfound');
     return;
   }
 
-  const rect = (e.target as Element).getBoundingClientRect();
-  const posX: number = e.clientX - rect.left;
-  const posY: number = e.clientY - rect.top;
+  const rect = canvas.getBoundingClientRect();
+  const posX = clientX - rect.left;
+  const posY = clientY - rect.top;
 
-  LAppDelegate.getInstance()._view!.onTouchesMoved(posX, posY);
+  view.onTouchesMoved(posX, posY);
+}
+
+function onMouseWheel(e: WheelEvent): void {
+  if (!LAppDefine.ScrollToResize) {
+    return;
+  }
+
+  e.preventDefault();
+  const direction = e.deltaY > 0 ? -1 : 1;
+  const nextScale = Math.max(0.3, Math.min(3.0, LAppDefine.CurrentKScale + direction * 0.05));
+  LAppDefine.setCurrentKScale(nextScale);
+  LAppDelegate.getInstance()._view?.initialize();
 }
 
 /**

@@ -36,13 +36,28 @@ export let ResourcesPath = "";
 // Model directory and filename storage
 export let ModelDir: string[] = [];
 export let ModelFileNames: string[] = []; // New array to store model file names
+export let LookAtMouse = true;
+export let ScrollToResize = true;
+
+export function setCurrentKScale(kScale: number) {
+  CurrentKScale = kScale;
+}
 
 // Function to update model configuration with both directory and file name
-export function updateModelConfig(resourcePath: string, modelDirectory: string, modelFileName: string, kScale?: number) {
-  console.log('Updating model config:', { resourcePath, modelDirectory, modelFileName, kScale });
+export function updateModelConfig(
+  resourcePath: string,
+  modelDirectory: string,
+  modelFileName: string,
+  kScale?: number,
+  lookAtMouse = true,
+  scrollToResize = true
+) {
+  console.log('Updating model config:', { resourcePath, modelDirectory, modelFileName, kScale, lookAtMouse, scrollToResize });
   ResourcesPath = resourcePath;
   ModelDir = [modelDirectory];
   ModelFileNames = [modelFileName]; // Store the actual model file name
+  LookAtMouse = lookAtMouse;
+  ScrollToResize = scrollToResize;
   if (kScale !== undefined) {
     CurrentKScale = kScale;
   }

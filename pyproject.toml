@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "aiohttp>=3.9.0",
+    "pywebview>=5.4",
 ]
 
 [project.scripts]
 liveyuki-l2d = "main:main"
+liveyuki-l2d-desktop = "desktop:main"

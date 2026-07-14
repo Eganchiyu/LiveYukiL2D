@@ -9,6 +9,8 @@ interface ModelInfo {
   kScale?: number;
   emotionMap?: Record<string, number | string>;
   defaultEmotion?: number | string;
+  scrollToResize?: boolean;
+  lookAtMouse?: boolean;
 }
 
 interface IncomingMessage {
@@ -53,7 +55,14 @@ function loadModel(modelInfo: ModelInfo = DEFAULT_MODEL) {
   setStatus(`加载模型: ${modelInfo.name || modelDir}`);
   console.log('[LiveYuki] model config', { baseUrl, modelDir, modelFileName, modelInfo });
 
-  updateModelConfig(baseUrl, modelDir, modelFileName, Number(modelInfo.kScale ?? 1.0));
+  updateModelConfig(
+    baseUrl,
+    modelDir,
+    modelFileName,
+    Number(modelInfo.kScale ?? 1.0),
+    modelInfo.lookAtMouse ?? true,
+    modelInfo.scrollToResize ?? true
+  );
 
   // 释放旧模型并重新初始化。Open-LLM-VTuber 原代码也这么做。
   try {
