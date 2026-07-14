@@ -1,6 +1,7 @@
 import { updateModelConfig } from './WebSDK/src/lappdefine';
 import { initializeLive2D } from './WebSDK/src/main';
 import { LAppLive2DManager } from './WebSDK/src/lapplive2dmanager';
+import { LAppDelegate } from './WebSDK/src/lappdelegate';
 import * as LAppDefine from './WebSDK/src/lappdefine';
 
 interface ModelInfo {
@@ -25,6 +26,7 @@ interface IncomingMessage {
 
 const statusEl = document.getElementById('status')!;
 const subtitleEl = document.getElementById('subtitle')!;
+const canvasEl = document.getElementById('canvas') as HTMLCanvasElement;
 const DEFAULT_MODEL: ModelInfo = {
   name: 'Yuki',
   url: 'http://127.0.0.1:18765/models/Yuki/Yuki.model3.json',
@@ -82,6 +84,50 @@ function loadModel(modelInfo: ModelInfo = DEFAULT_MODEL) {
 
 function getAdapter(): any {
   return (window as any).getLAppAdapter?.();
+}
+
+function getWebviewApi(): any {
+  return (window as any).pywebview?.api || (window as any).api || null;
+}
+
+async function getCanvasPointFromScreenPoint(cursor: CursorPosition): Promise<{ x: number; y: number } | null> {
+  if (!canvasEl) return null;
+  const rect = canvasEl.getBoundingClientRect();
+  const api = getWebviewApi();
+  let windowPos: CursorPosition = { x: window.screenX, y: window.screenY };
+  if (api?.getWindowPosition) {
+    windowPos = await api.getWindowPosition();
+  }
+  const x = cursor.x - Number(windowPos.x || 0) - rect.left;
+  const y = cursor.y - Number(windowPos.y || 0) - rect.top;
+  return { x, y };
+}
+
+function startMouseFollowLoop() {
+  let running = false;
+  const tick = async () => {
+    const api = getWebviewApi();
+    if (running || !api?.getCursorPosition || !LAppDefine.LookAtMouse) return;
+    const model = LAppLive2DManager.getInstance().getModel(0);
+    if (!model) return;
+
+    running = true;
+    try {
+      const cursor = await api.getCursorPosition();
+      const point = await getCanvasPointFromScreenPoint(cursor);
+      const view = LAppDelegate.getInstance().getView();
+      const rect = canvasEl.getBoundingClientRect();
+      if (point && view && rect.width > 0 && rect.height > 0) {
+        view.onTouchesMoved(point.x, point.y);
+      }
+    } catch {
+      // ignore transient bridge errors
+    } finally {
+      running = false;
+    }
+  };
+
+  window.setInterval(tick, 16);
 }
 
 function setExpression(expression: number | string) {
@@ -170,7 +216,9 @@ function handleMessage(msg: IncomingMessage) {
 }
 
 function connectWebSocket() {
-  const wsUrl = 'ws://127.0.0.1:18765/ws';
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsHost = window.location.hostname || '127.0.0.1';
+  const wsUrl = `${wsProtocol}//${wsHost}:18765/ws`;
   const ws = new WebSocket(wsUrl);
 
   ws.addEventListener('open', () => setStatus(`WS 已连接: ${wsUrl}`));

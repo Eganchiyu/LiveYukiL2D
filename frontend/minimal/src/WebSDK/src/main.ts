@@ -47,35 +47,33 @@ export function initializeLive2D(): void {
     (window as any).getLAppAdapter = () => LAppAdapter.getInstance();
   }
 
-  if ((window as any).api?.setIgnoreMouseEvent) {
-    const parent = document.getElementById("live2d");
+  const desktopApi = (window as any).pywebview?.api || (window as any).api;
+  if (desktopApi?.setIgnoreMouseEvent || desktopApi?.set_ignore_mouse_event) {
+    const setIgnoreMouseEvent = (ignored: boolean) => {
+      if (desktopApi.setIgnoreMouseEvent) desktopApi.setIgnoreMouseEvent(ignored);
+      else desktopApi.set_ignore_mouse_event(ignored);
+    };
 
-    parent?.addEventListener("pointermove", (e) => {
+    const updateMousePassthrough = (clientX: number, clientY: number) => {
       const model = LAppLive2DManager.getInstance().getModel(0);
       const view = LAppDelegate.getInstance().getView();
+      const canvasElement = document.getElementById("canvas") as HTMLCanvasElement | null;
+      const rect = canvasElement?.getBoundingClientRect();
+      if (!model || !view || !rect) {
+        setIgnoreMouseEvent(true);
+        return;
+      }
 
-      // Transform screen coordinates to Live2D canvas coordinates
-      const x = view?._deviceToScreen.transformX(e.x);
-      const y = view?._deviceToScreen.transformY(e.y);
+      const deviceX = (clientX - rect.left) * window.devicePixelRatio;
+      const deviceY = (clientY - rect.top) * window.devicePixelRatio;
+      const x = view.transformViewX(deviceX);
+      const y = view.transformViewY(deviceY);
+      const isHit = Boolean(model.anyhitTest?.(x, y) || model.isHitOnModel?.(x, y));
+      setIgnoreMouseEvent(!isHit);
+    };
 
-      // Check if mouse is over the Live2D model
-      (window as any).api.setIgnoreMouseEvent(!model?.anyhitTest(x, y) && !model?.isHitOnModel(x, y));
-    });
-
-    // Add pointerdown event listener
-    parent?.addEventListener("pointerdown", (e) => {
-      const model = LAppLive2DManager.getInstance().getModel(0);
-      const view = LAppDelegate.getInstance().getView();
-
-      // Transform screen coordinates to Live2D canvas coordinates
-      const x = view?._deviceToScreen.transformX(e.x);
-      const y = view?._deviceToScreen.transformY(e.y);
-
-      // Test hit and log result
-      const hitAreaName = model?.anyhitTest(x, y);
-      const isHit = hitAreaName !== null || model?.isHitOnModel(x, y);
-      console.log("Model clicked:", isHit, hitAreaName ? `in area: ${hitAreaName}` : '');
-    });
+    window.addEventListener("pointermove", (e) => updateMousePassthrough(e.clientX, e.clientY), { passive: true });
+    setIgnoreMouseEvent(true);
   }
 }
 
