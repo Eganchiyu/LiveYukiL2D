@@ -21,4 +21,4 @@ frontend/minimal/electron-preload.cjs
 
 # OS junk
 Thumbs.db
-desktop.ini
+desktop.iniconfig.json
