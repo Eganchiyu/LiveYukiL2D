@@ -191,6 +191,9 @@ export class LAppDelegate {
 
       // 画面の初期化
       // 屏幕初始化
+      gl!.bindFramebuffer(gl!.FRAMEBUFFER, frameBuffer);
+      gl!.viewport(0, 0, canvas!.width, canvas!.height);
+      gl!.colorMask(true, true, true, true);
       gl!.clearColor(0.0, 0.0, 0.0, 0.0);
 
       // 深度テストを有効化

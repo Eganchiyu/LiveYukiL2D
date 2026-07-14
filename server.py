@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import ctypes
+import ctypes.wintypes
 import json
 import mimetypes
 from pathlib import Path
@@ -191,6 +193,12 @@ async def api_say(request: web.Request) -> web.Response:
     return json_response({"ok": True, "sent": msg, "clients": len(CLIENTS)})
 
 
+async def api_cursor(_: web.Request) -> web.Response:
+    point = ctypes.wintypes.POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+    return json_response({"x": point.x, "y": point.y})
+
+
 async def api_audio(request: web.Request) -> web.Response:
     data = await request.json()
     audio_path = data.get("path")
@@ -229,6 +237,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/config", api_config)
     app.router.add_get("/api/model", api_model)
     app.router.add_get("/api/say", api_say)
+    app.router.add_get("/api/cursor", api_cursor)
     app.router.add_post("/api/audio", api_audio)
     app.router.add_get("/models/{path:.*}", model_static)
     app.router.add_get("/{path:.*}", frontend_static)

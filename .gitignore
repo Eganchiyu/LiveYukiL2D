@@ -11,3 +11,14 @@ wheels/
 
 # reference files
 reference/
+
+# Node dependencies
+frontend/minimal/node_modules/
+
+# Electron local entry files
+frontend/minimal/electron-main.cjs
+frontend/minimal/electron-preload.cjs
+
+# OS junk
+Thumbs.db
+desktop.ini

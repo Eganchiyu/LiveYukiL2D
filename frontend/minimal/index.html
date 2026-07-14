@@ -18,11 +18,45 @@
         position: fixed;
         inset: 0;
       }
+      body.edit-mode #app {
+        cursor: move;
+      }
+      body.edit-mode #app::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        box-sizing: border-box;
+        border: 2px dashed rgba(80, 180, 255, 0.95);
+        background:
+          linear-gradient(90deg, rgba(80, 180, 255, 0.28), rgba(80, 180, 255, 0.28)) top left / 100% 12px no-repeat,
+          linear-gradient(90deg, rgba(80, 180, 255, 0.28), rgba(80, 180, 255, 0.28)) bottom left / 100% 12px no-repeat,
+          linear-gradient(0deg, rgba(80, 180, 255, 0.28), rgba(80, 180, 255, 0.28)) top left / 12px 100% no-repeat,
+          linear-gradient(0deg, rgba(80, 180, 255, 0.28), rgba(80, 180, 255, 0.28)) top right / 12px 100% no-repeat;
+        pointer-events: none;
+      }
+      body.edit-mode #app::after {
+        content: "拖动内部移动 · 拖动边缘改大小 · 滚轮缩放模型";
+        position: fixed;
+        right: 10px;
+        bottom: 10px;
+        z-index: 31;
+        padding: 5px 8px;
+        border-radius: 8px;
+        background: rgba(20, 20, 24, 0.78);
+        color: rgba(255, 255, 255, 0.92);
+        font-size: 12px;
+        pointer-events: none;
+      }
       #canvas {
         width: 100vw;
         height: 100vh;
         display: block;
         background: transparent;
+        -webkit-app-region: no-drag;
+      }
+      body.edit-mode #canvas {
+        pointer-events: none;
       }
       #panel {
         position: fixed;
@@ -38,6 +72,28 @@
         backdrop-filter: blur(8px);
         user-select: none;
         display: none;
+        -webkit-app-region: no-drag;
+      }
+      #edit-hint {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 20;
+        display: none;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(20, 20, 24, 0.78);
+        color: #fff;
+        font-size: 13px;
+        line-height: 1.4;
+        white-space: nowrap;
+        user-select: none;
+        pointer-events: none;
+        backdrop-filter: blur(8px);
+      }
+      body.edit-mode #edit-hint {
+        display: block;
       }
       #subtitle {
         position: fixed;
@@ -73,6 +129,7 @@
         <button id="btn-smile">表情 0</button>
         <button id="btn-info">调试信息</button>
       </div>
+      <div id="edit-hint">编辑模式：拖动内部移动窗口，拖拽蓝色边缘调整大小，滚轮缩放模型，按 Ctrl+Alt+Y 锁定</div>
       <div id="subtitle"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>

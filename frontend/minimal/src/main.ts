@@ -24,9 +24,21 @@ interface IncomingMessage {
   display_text?: { text?: string; name?: string; avatar?: string };
 }
 
+type LiveYukiApi = {
+  getCursorPosition?: () => Promise<CursorPosition>;
+  getWindowPosition?: () => Promise<CursorPosition>;
+  setWindowPosition?: (x: number, y: number) => void;
+  getEditMode?: () => Promise<boolean>;
+  setEditMode?: (enabled: boolean) => void;
+  toggleEditMode?: () => void;
+  saveWindowBounds?: () => void;
+  onEditModeChanged?: (callback: (enabled: boolean) => void) => () => void;
+};
+
 const statusEl = document.getElementById('status')!;
 const subtitleEl = document.getElementById('subtitle')!;
 const canvasEl = document.getElementById('canvas') as HTMLCanvasElement;
+let isEditMode = false;
 const DEFAULT_MODEL: ModelInfo = {
   name: 'Yuki',
   url: 'http://127.0.0.1:18765/models/Yuki/Yuki.model3.json',
@@ -86,18 +98,35 @@ function getAdapter(): any {
   return (window as any).getLAppAdapter?.();
 }
 
-function getWebviewApi(): any {
+function getWebviewApi(): LiveYukiApi | null {
   return (window as any).pywebview?.api || (window as any).api || null;
+}
+
+type CursorPosition = { x: number; y: number };
+
+async function getCursorPosition(): Promise<CursorPosition | null> {
+  try {
+    const response = await fetch('/api/cursor', { cache: 'no-store' });
+    if (response.ok) return await response.json();
+  } catch {
+    // fallback to pywebview bridge
+  }
+
+  const api = getWebviewApi();
+  if (api?.getCursorPosition) return await api.getCursorPosition();
+  return null;
+}
+
+async function getWindowPosition(): Promise<CursorPosition> {
+  const api = getWebviewApi();
+  if (api?.getWindowPosition) return await api.getWindowPosition();
+  return { x: window.screenX, y: window.screenY };
 }
 
 async function getCanvasPointFromScreenPoint(cursor: CursorPosition): Promise<{ x: number; y: number } | null> {
   if (!canvasEl) return null;
   const rect = canvasEl.getBoundingClientRect();
-  const api = getWebviewApi();
-  let windowPos: CursorPosition = { x: window.screenX, y: window.screenY };
-  if (api?.getWindowPosition) {
-    windowPos = await api.getWindowPosition();
-  }
+  const windowPos = await getWindowPosition();
   const x = cursor.x - Number(windowPos.x || 0) - rect.left;
   const y = cursor.y - Number(windowPos.y || 0) - rect.top;
   return { x, y };
@@ -106,22 +135,27 @@ async function getCanvasPointFromScreenPoint(cursor: CursorPosition): Promise<{ 
 function startMouseFollowLoop() {
   let running = false;
   const tick = async () => {
-    const api = getWebviewApi();
-    if (running || !api?.getCursorPosition || !LAppDefine.LookAtMouse) return;
-    const model = LAppLive2DManager.getInstance().getModel(0);
-    if (!model) return;
+    if (running) return;
 
     running = true;
     try {
-      const cursor = await api.getCursorPosition();
-      const point = await getCanvasPointFromScreenPoint(cursor);
+      const manager = LAppLive2DManager.getInstance();
+      const model = manager.getModel(0);
       const view = LAppDelegate.getInstance().getView();
+      if (!LAppDefine.LookAtMouse || !model || !view) return;
+
+      const cursor = await getCursorPosition();
+      if (!cursor) return;
+
+      const point = await getCanvasPointFromScreenPoint(cursor);
       const rect = canvasEl.getBoundingClientRect();
-      if (point && view && rect.width > 0 && rect.height > 0) {
-        view.onTouchesMoved(point.x, point.y);
-      }
+      if (!point || rect.width <= 0 || rect.height <= 0) return;
+
+      const viewX = view.transformViewX(point.x * window.devicePixelRatio);
+      const viewY = view.transformViewY(point.y * window.devicePixelRatio);
+      manager.onDrag(viewX, viewY);
     } catch {
-      // ignore transient bridge errors
+      // 忽略临时鼠标坐标错误
     } finally {
       running = false;
     }
@@ -238,12 +272,76 @@ function connectWebSocket() {
   (window as any).LiveYukiWS = ws;
 }
 
+function applyEditMode(enabled: boolean) {
+  isEditMode = enabled;
+  document.body.classList.toggle('edit-mode', enabled);
+  setStatus(enabled ? '编辑模式：拖动模型区域移动窗口，滚轮缩放，拖拽边缘调整大小，按 Ctrl+Alt+Y 锁定' : '锁定模式：鼠标穿透已启用');
+}
+
+function setupEditWindowControls() {
+  let dragging = false;
+  let dragOffset = { x: 0, y: 0 };
+
+  window.addEventListener('mousedown', async (event) => {
+    if (!isEditMode || event.button !== 0) return;
+    const edgeSize = 12;
+    if (
+      event.clientX <= edgeSize ||
+      event.clientY <= edgeSize ||
+      window.innerWidth - event.clientX <= edgeSize ||
+      window.innerHeight - event.clientY <= edgeSize
+    ) {
+      return;
+    }
+
+    const api = getWebviewApi();
+    if (!api?.setWindowPosition) return;
+
+    const windowPos = await getWindowPosition();
+    dragOffset = { x: event.screenX - windowPos.x, y: event.screenY - windowPos.y };
+    dragging = true;
+    event.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!dragging) return;
+    getWebviewApi()?.setWindowPosition?.(event.screenX - dragOffset.x, event.screenY - dragOffset.y);
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    getWebviewApi()?.saveWindowBounds?.();
+  });
+
+  window.addEventListener('wheel', (event) => {
+    if (!isEditMode || !LAppDefine.ScrollToResize) return;
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const nextScale = Math.max(0.3, Math.min(3.0, LAppDefine.CurrentKScale + direction * 0.05));
+    LAppDefine.setCurrentKScale(nextScale);
+    LAppDelegate.getInstance().getView()?.initialize();
+  }, { passive: false });
+}
+
+async function setupEditMode() {
+  const api = getWebviewApi();
+  if (!api) return;
+
+  const initial = await api.getEditMode?.();
+  applyEditMode(Boolean(initial));
+  api.onEditModeChanged?.(applyEditMode);
+
+  window.addEventListener('beforeunload', () => api.saveWindowBounds?.());
+}
+
 function exposeDebug() {
   (window as any).LiveYuki = {
     loadModel,
     setExpression,
     sayText,
     playAudioBase64,
+    toggleEditMode: () => getWebviewApi()?.toggleEditMode?.(),
     manager: () => LAppLive2DManager.getInstance(),
     model: () => LAppLive2DManager.getInstance().getModel(0),
     adapter: getAdapter,
@@ -259,5 +357,8 @@ document.getElementById('btn-info')?.addEventListener('click', () => {
 });
 
 exposeDebug();
+setupEditWindowControls();
+setupEditMode();
 loadModel(DEFAULT_MODEL);
 connectWebSocket();
+startMouseFollowLoop();
