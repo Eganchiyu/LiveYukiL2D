@@ -1,0 +1,12 @@
+[project]
+name = "liveyukil2d"
+version = "0.1.0"
+description = "Minimal Live2D desktop pet spike for Yuki"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9.0",
+]
+
+[project.scripts]
+liveyuki-l2d = "main:main"

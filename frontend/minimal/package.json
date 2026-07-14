@@ -1,0 +1,16 @@
+{
+  "name": "liveyuki-l2d-minimal",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 5173"
+  },
+  "dependencies": {
+    "typescript": "~5.5.2",
+    "vite": "^5.3.1"
+  },
+  "devDependencies": {}
+}

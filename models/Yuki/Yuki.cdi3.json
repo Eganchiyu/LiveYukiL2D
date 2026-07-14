@@ -1,0 +1,197 @@
+{
+	"Version": 3,
+	"Parameters": [
+		{
+			"Id": "ParamAngleX",
+			"GroupId": "ParamGroup",
+			"Name": "角度 X"
+		},
+		{
+			"Id": "ParamAngleY",
+			"GroupId": "ParamGroup",
+			"Name": "角度 Y"
+		},
+		{
+			"Id": "ParamAngleZ",
+			"GroupId": "ParamGroup",
+			"Name": "角度 Z"
+		},
+		{
+			"Id": "ParamEyeLOpen",
+			"GroupId": "",
+			"Name": "左眼 开闭"
+		},
+		{
+			"Id": "ParamEyeROpen",
+			"GroupId": "",
+			"Name": "右眼 开闭"
+		},
+		{
+			"Id": "ParamEyeBallX",
+			"GroupId": "",
+			"Name": "眼珠 X"
+		},
+		{
+			"Id": "ParamEyeBallY",
+			"GroupId": "",
+			"Name": "眼珠 Y"
+		},
+		{
+			"Id": "ParamMouthForm",
+			"GroupId": "",
+			"Name": "嘴 变形"
+		},
+		{
+			"Id": "ParamMouthOpenY",
+			"GroupId": "",
+			"Name": "嘴 开闭"
+		},
+		{
+			"Id": "ParamBodyAngleX",
+			"GroupId": "",
+			"Name": "身体旋转 X"
+		},
+		{
+			"Id": "Param",
+			"GroupId": "",
+			"Name": "上衣摆动"
+		},
+		{
+			"Id": "ParamBodyAngleY",
+			"GroupId": "",
+			"Name": "身体旋转 Y"
+		},
+		{
+			"Id": "ParamBodyAngleZ",
+			"GroupId": "",
+			"Name": "身体旋转 Z"
+		},
+		{
+			"Id": "ParamBreath",
+			"GroupId": "",
+			"Name": "呼吸"
+		},
+		{
+			"Id": "ParamHairFront",
+			"GroupId": "",
+			"Name": "摇动 前发"
+		},
+		{
+			"Id": "ParamHairBack",
+			"GroupId": "",
+			"Name": "摇动 后发"
+		},
+		{
+			"Id": "Param2",
+			"GroupId": "",
+			"Name": "裙子摆动"
+		}
+	],
+	"ParameterGroups": [
+		{
+			"Id": "ParamGroup",
+			"GroupId": "",
+			"Name": "head"
+		}
+	],
+	"Parts": [
+		{
+			"Id": "Part22",
+			"Name": "发饰"
+		},
+		{
+			"Id": "Part15",
+			"Name": "前发"
+		},
+		{
+			"Id": "Part10",
+			"Name": "口"
+		},
+		{
+			"Id": "Part6",
+			"Name": "眉毛"
+		},
+		{
+			"Id": "Part",
+			"Name": "目"
+		},
+		{
+			"Id": "Part9",
+			"Name": "鼻子"
+		},
+		{
+			"Id": "Part11",
+			"Name": "脸"
+		},
+		{
+			"Id": "Part12",
+			"Name": "耳"
+		},
+		{
+			"Id": "Part21",
+			"Name": "衣服"
+		},
+		{
+			"Id": "Part20",
+			"Name": "右手"
+		},
+		{
+			"Id": "Part19",
+			"Name": "左手"
+		},
+		{
+			"Id": "Part16",
+			"Name": "后发片"
+		},
+		{
+			"Id": "Part8",
+			"Name": "右眉毛"
+		},
+		{
+			"Id": "Part7",
+			"Name": "左眉毛"
+		},
+		{
+			"Id": "Part2",
+			"Name": "左目"
+		},
+		{
+			"Id": "Part3",
+			"Name": "右目"
+		},
+		{
+			"Id": "Part14",
+			"Name": "右耳"
+		},
+		{
+			"Id": "Part13",
+			"Name": "左耳"
+		},
+		{
+			"Id": "Part17",
+			"Name": "上衣"
+		},
+		{
+			"Id": "Part18",
+			"Name": "裙子"
+		},
+		{
+			"Id": "Part4",
+			"Name": "左目玉"
+		},
+		{
+			"Id": "Part5",
+			"Name": "右目玉"
+		}
+	],
+	"CombinedParameters": [
+		[
+			"ParamAngleX",
+			"ParamAngleY"
+		],
+		[
+			"ParamMouthForm",
+			"ParamMouthOpenY"
+		]
+	]
+}
