@@ -22,6 +22,8 @@ interface IncomingMessage {
   audio?: string;
   actions?: { expressions?: Array<number | string> };
   display_text?: { text?: string; name?: string; avatar?: string };
+  state?: string;
+  message?: string;
 }
 
 type LiveYukiApi = {
@@ -37,6 +39,11 @@ type LiveYukiApi = {
 
 const statusEl = document.getElementById('status')!;
 const subtitleEl = document.getElementById('subtitle')!;
+const chatForm = document.getElementById('chat') as HTMLFormElement;
+const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement;
+const chatSend = document.getElementById('chat-send') as HTMLButtonElement;
+const chatCancel = document.getElementById('chat-cancel') as HTMLButtonElement;
+const chatClear = document.getElementById('chat-clear') as HTMLButtonElement;
 const canvasEl = document.getElementById('canvas') as HTMLCanvasElement;
 let isEditMode = false;
 const DEFAULT_MODEL: ModelInfo = {
@@ -232,6 +239,21 @@ function handleMessage(msg: IncomingMessage) {
     return;
   }
 
+  if (msg.type === 'state') {
+    const state = msg.state || 'idle';
+    chatSend.disabled = state === 'thinking';
+    chatCancel.disabled = state !== 'thinking';
+    setStatus(state === 'thinking' ? 'Yuki 思考中...' : state === 'speaking' ? 'Yuki 正在说话' : `运行状态：${state}`);
+    return;
+  }
+
+  if (msg.type === 'error') {
+    chatSend.disabled = false;
+    chatCancel.disabled = true;
+    setStatus(msg.message || '处理失败');
+    return;
+  }
+
   if (msg.type === 'expression') {
     if (msg.expression !== undefined) setExpression(msg.expression);
     return;
@@ -257,6 +279,8 @@ function connectWebSocket() {
 
   ws.addEventListener('open', () => setStatus(`WS 已连接: ${wsUrl}`));
   ws.addEventListener('close', () => {
+    chatSend.disabled = false;
+    chatCancel.disabled = true;
     setStatus('WS 已断开，2 秒后重连');
     setTimeout(connectWebSocket, 2000);
   });
@@ -271,6 +295,39 @@ function connectWebSocket() {
 
   (window as any).LiveYukiWS = ws;
 }
+
+function sendChatMessage() {
+  const text = chatInput.value.trim();
+  const ws = (window as any).LiveYukiWS as WebSocket | undefined;
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) {
+    setStatus('聊天连接尚未就绪');
+    return;
+  }
+  ws.send(JSON.stringify({ type: 'user-input', text }));
+  chatInput.value = '';
+  chatSend.disabled = true;
+  chatCancel.disabled = false;
+}
+
+chatForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  sendChatMessage();
+});
+chatInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    sendChatMessage();
+  }
+});
+chatCancel.addEventListener('click', () => {
+  const ws = (window as any).LiveYukiWS as WebSocket | undefined;
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'cancel' }));
+});
+chatClear.addEventListener('click', () => {
+  const ws = (window as any).LiveYukiWS as WebSocket | undefined;
+  if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'clear-history' }));
+  subtitleEl.textContent = '';
+});
 
 function applyEditMode(enabled: boolean) {
   isEditMode = enabled;
@@ -359,6 +416,5 @@ document.getElementById('btn-info')?.addEventListener('click', () => {
 exposeDebug();
 setupEditWindowControls();
 setupEditMode();
-loadModel(DEFAULT_MODEL);
 connectWebSocket();
 startMouseFollowLoop();

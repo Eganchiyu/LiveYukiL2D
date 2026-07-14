@@ -397,6 +397,69 @@ ToolExecution
 
 ## 8. 近期执行顺序
 
+### 当前进度（2026-07-14）
+
+当前已完成阶段一和阶段二的最小可运行切片：
+
+- 保留并验证现有 Electron、aiohttp、WebSocket 和 Live2D 启动链路
+- 增加 `RuntimeState`、单管线锁、单会话历史和任务取消机制
+- 增加统一的 `state`、`say`、`error` 事件，以及 `user-input`、`cancel`、`clear-history` 输入事件
+- 前端增加聊天输入框、发送、中断和清空会话操作
+- 增加 OpenAI 兼容 `LLMProvider`，配置缺失时明确返回错误
+- 复用 YukiV6 的 LLM 请求、历史原子保存、上下文消息组织和阶段化管线思想
+- 修正静态资源路径关系校验和音频接口路径越界风险
+- 修复 WebSocket 广播集合竞态，单个失效连接不会中断全局事件发送
+- 修复取消任务和清空历史的竞态，清空历史会等待旧任务收尾并进入同一管线锁
+- `/api/config` 返回值会隐藏 `llm.apiKey`，LLM Key 优先支持 `LIVEYUKI_LLM_API_KEY` 环境变量
+- `/api/audio` 限制请求体、Base64 和本地 WAV 文件大小，并暂时只接受 WAV
+- 服务端模型事件统一为 `set-model-and-conf`，前端保留旧 `set-model` 兼容
+- 前端改为只由服务端模型事件触发首次模型加载，避免启动时重复初始化模型
+
+当前配置入口：
+
+```json
+{
+  "llm": {
+    "baseUrl": "http://127.0.0.1:8000/v1",
+    "apiKey": "也可以使用 LIVEYUKI_LLM_API_KEY 环境变量",
+    "model": "your-model",
+    "timeoutSeconds": 60
+  }
+}
+```
+
+当前运行时文件：
+
+- `liveyuki_l2d/state.py`：单实例状态、会话历史、原子保存
+- `liveyuki_l2d/pipeline.py`：串行推理、状态事件和任务取消
+- `liveyuki_l2d/llm.py`：OpenAI 兼容文本 LLM 适配器
+- `liveyuki_l2d/events.py`：运行时事件构造
+- `liveyuki_l2d/protocol.py`：前后端协议构造函数
+- `data/conversation.json`：本地短期会话历史
+
+尚未完成的部分：
+
+- LLM 流式输出
+- YukiV6 工具注册和执行子 Agent
+- 主动对话策略和用户活跃度
+- 视觉理解、浏览器观察和电脑操作
+- 权限确认、工具审计和控制中心
+
+本次实现后的阶段判断：
+
+| 阶段 | 状态 |
+|------|------|
+| 阶段一：稳定单管线基础 | 基础版本完成，仍需补充流式输出和更完整测试 |
+| 阶段二：聊天与 Yuki 人格 | 最小文本聊天完成，仍需完善人格配置和上下文管理 |
+| 阶段三：主动对话和灵动待机 | 待开始 |
+| 阶段四：视觉理解和主动窥屏 | 待开始 |
+| 阶段五：浏览器窥屏与网页 Agent | 待开始 |
+| 阶段六：电脑操作 Agent | 待开始 |
+| 阶段七：状态中心和控制中心 | 待开始 |
+| 阶段八：音频增强 | 按计划暂缓 |
+
+下一开发目标是补充 LLM 流式事件、完善聊天历史管理，并在权限模型和审计结构建立后再迁移执行子 Agent。
+
 1. 保持当前 Live2D/Electron 启动链路稳定
 2. 将前端输入和后端输出协议扩展为统一事件协议
 3. 建立单管线 `RuntimeState` 和任务取消机制

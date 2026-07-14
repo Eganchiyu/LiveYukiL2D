@@ -1,0 +1,32 @@
+[
+  {
+    "role": "user",
+    "content": "你好",
+    "timestamp": 1784030175.271308,
+    "source": "text"
+  },
+  {
+    "role": "user",
+    "content": "你好",
+    "timestamp": 1784030413.8639598,
+    "source": "text"
+  },
+  {
+    "role": "assistant",
+    "content": "你好呀，有什么需要帮忙的吗？😊",
+    "timestamp": 1784030416.5393577,
+    "source": "text"
+  },
+  {
+    "role": "user",
+    "content": "你是谁",
+    "timestamp": 1784030471.3279612,
+    "source": "text"
+  },
+  {
+    "role": "assistant",
+    "content": "我是 Yuki，你的桌面 Live2D 助手，主要负责陪你聊天、帮你快速处理一些简单问题~有什么想聊的随时可以找我哦！✨",
+    "timestamp": 1784030472.766486,
+    "source": "text"
+  }
+]

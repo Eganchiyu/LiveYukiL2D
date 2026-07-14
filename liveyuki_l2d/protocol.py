@@ -30,6 +30,24 @@ def full_text_message(text: str) -> dict[str, str]:
     return {"type": "full-text", "text": text}
 
 
+def user_input_message(text: str) -> dict[str, str]:
+    return {"type": "user-input", "text": text}
+
+
+def state_message(state: str, task_id: str | None = None) -> dict[str, Any]:
+    message: dict[str, Any] = {"type": "state", "state": state}
+    if task_id:
+        message["task_id"] = task_id
+    return message
+
+
+def error_message(message: str, task_id: str | None = None) -> dict[str, Any]:
+    result: dict[str, Any] = {"type": "error", "message": message}
+    if task_id:
+        result["task_id"] = task_id
+    return result
+
+
 def audio_message(
     audio_wav_path: str | Path | None = None,
     text: str = "",

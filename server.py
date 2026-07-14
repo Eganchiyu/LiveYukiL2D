@@ -9,6 +9,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 
+from liveyuki_l2d.events import error_event, state_event
+from liveyuki_l2d.protocol import set_model_message
+from liveyuki_l2d.llm import OpenAICompatibleProvider
+from liveyuki_l2d.pipeline import RuntimePipeline
+from liveyuki_l2d.state import RuntimeState
+
 try:
     from aiohttp import web, WSMsgType
 except ImportError as exc:
@@ -20,8 +26,11 @@ ROOT = Path(__file__).resolve().parent
 MODELS_DIR = ROOT / "models"
 FRONTEND_DIR = ROOT / "frontend" / "minimal" / "dist"
 CONFIG_PATH = ROOT / "config.json"
+HISTORY_PATH = ROOT / "data" / "conversation.json"
 HOST = "127.0.0.1"
 PORT = 18765
+MAX_AUDIO_BYTES = 10 * 1024 * 1024
+MAX_AUDIO_BASE64_LENGTH = 14 * 1024 * 1024
 
 CLIENTS: set[web.WebSocketResponse] = set()
 
@@ -42,6 +51,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "model": {
         "kScale": 1.0,
         "scrollToResize": True,
+    },
+    "llm": {
+        "baseUrl": "",
+        "apiKey": "",
+        "model": "",
+        "timeoutSeconds": 60,
+        "systemPrompt": "你是 Yuki，一个友善、简洁的桌面 Live2D 助手。请用中文回答。",
     },
 }
 
@@ -64,6 +80,14 @@ def load_config() -> dict[str, Any]:
     except json.JSONDecodeError as exc:
         raise SystemExit(f"config.json 格式错误：{exc}") from exc
     return deep_merge(DEFAULT_CONFIG, data)
+
+
+def public_config() -> dict[str, Any]:
+    config = json.loads(json.dumps(load_config(), ensure_ascii=False))
+    llm_config = config.get("llm")
+    if isinstance(llm_config, dict) and llm_config.get("apiKey"):
+        llm_config["apiKey"] = "***"
+    return config
 
 
 def get_yuki_model_info() -> dict[str, Any]:
@@ -98,7 +122,9 @@ def json_response(data: Any, status: int = 200) -> web.Response:
 def safe_join(base: Path, rel: str) -> Path:
     rel = unquote(rel).replace("\\", "/").lstrip("/")
     path = (base / rel).resolve()
-    if not str(path).startswith(str(base.resolve())):
+    try:
+        path.relative_to(base.resolve())
+    except ValueError:
         raise web.HTTPForbidden(text="invalid path")
     return path
 
@@ -137,11 +163,14 @@ async def model_static(request: web.Request) -> web.StreamResponse:
 async def broadcast(message: dict[str, Any]) -> None:
     dead: list[web.WebSocketResponse] = []
     text = json.dumps(message, ensure_ascii=False)
-    for ws in CLIENTS:
+    for ws in tuple(CLIENTS):
         if ws.closed:
             dead.append(ws)
             continue
-        await ws.send_str(text)
+        try:
+            await ws.send_str(text)
+        except Exception:
+            dead.append(ws)
     for ws in dead:
         CLIENTS.discard(ws)
 
@@ -152,12 +181,40 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
     CLIENTS.add(ws)
     print(f"[ws] client connected, total={len(CLIENTS)}")
 
-    await ws.send_str(json.dumps({"type": "set-model", "model_info": get_yuki_model_info()}, ensure_ascii=False))
+    await ws.send_str(json.dumps(set_model_message(get_yuki_model_info()), ensure_ascii=False))
     await ws.send_str(json.dumps({"type": "say", "text": "Yuki 模型加载中..."}, ensure_ascii=False))
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
-            print("[ws] recv:", msg.data)
+            try:
+                data = json.loads(msg.data)
+            except json.JSONDecodeError:
+                await ws.send_str(json.dumps(error_event("消息不是有效 JSON"), ensure_ascii=False))
+                continue
+            if not isinstance(data, dict):
+                await ws.send_str(json.dumps(error_event("消息必须是 JSON 对象"), ensure_ascii=False))
+                continue
+            message_type = data.get("type")
+            pipeline: RuntimePipeline = request.app["pipeline"]
+            try:
+                if message_type == "user-input":
+                    text = data.get("text")
+                    if not isinstance(text, str) or not text.strip():
+                        raise ValueError("请输入文本")
+                    config = load_config()
+                    max_length = int(config.get("chat", {}).get("maxInputLength", 4000))
+                    text = text.strip()
+                    if len(text) > max_length:
+                        raise ValueError(f"输入不能超过 {max_length} 个字符")
+                    await pipeline.submit(text)
+                elif message_type == "cancel":
+                    await pipeline.cancel()
+                elif message_type == "clear-history":
+                    await pipeline.clear_history()
+                else:
+                    await ws.send_str(json.dumps(error_event(f"未知消息类型：{message_type}"), ensure_ascii=False))
+            except Exception as exc:
+                await ws.send_str(json.dumps(error_event(str(exc)), ensure_ascii=False))
         elif msg.type == WSMsgType.ERROR:
             print("[ws] error:", ws.exception())
 
@@ -167,12 +224,12 @@ async def websocket_handler(request: web.Request) -> web.WebSocketResponse:
 
 
 async def api_config(_: web.Request) -> web.Response:
-    return json_response(load_config())
+    return json_response(public_config())
 
 
 async def api_model(_: web.Request) -> web.Response:
     model_info = get_yuki_model_info()
-    await broadcast({"type": "set-model", "model_info": model_info})
+    await broadcast(set_model_message(model_info))
     return json_response({"ok": True, "model_info": model_info, "clients": len(CLIENTS)})
 
 
@@ -200,20 +257,28 @@ async def api_cursor(_: web.Request) -> web.Response:
 
 
 async def api_audio(request: web.Request) -> web.Response:
+    if request.content_length and request.content_length > MAX_AUDIO_BASE64_LENGTH:
+        return json_response({"ok": False, "error": "audio payload too large"}, 413)
     data = await request.json()
     audio_path = data.get("path")
     text = data.get("text", "")
     expression = data.get("expression")
     audio_b64 = data.get("audio", "")
+    if not isinstance(audio_b64, str):
+        return json_response({"ok": False, "error": "audio must be base64 string"}, 400)
+    if len(audio_b64) > MAX_AUDIO_BASE64_LENGTH:
+        return json_response({"ok": False, "error": "audio payload too large"}, 413)
 
     if audio_path and not audio_b64:
-        path = Path(audio_path)
-        if not path.is_absolute():
-            path = ROOT / path
-        if path.exists():
-            audio_b64 = base64.b64encode(path.read_bytes()).decode("ascii")
-        else:
-            return json_response({"ok": False, "error": f"audio path not found: {path}"}, 404)
+        try:
+            path = safe_join(ROOT, str(audio_path))
+        except web.HTTPException:
+            return json_response({"ok": False, "error": "invalid audio path"}, 403)
+        if not path.is_file() or path.suffix.lower() != ".wav":
+            return json_response({"ok": False, "error": "audio file not found or unsupported"}, 404)
+        if path.stat().st_size > MAX_AUDIO_BYTES:
+            return json_response({"ok": False, "error": "audio file too large"}, 413)
+        audio_b64 = base64.b64encode(path.read_bytes()).decode("ascii")
 
     msg: dict[str, Any] = {
         "type": "audio",
@@ -232,6 +297,8 @@ async def api_audio(request: web.Request) -> web.Response:
 
 def create_app() -> web.Application:
     app = web.Application()
+    runtime_state = RuntimeState(HISTORY_PATH)
+    app["pipeline"] = RuntimePipeline(runtime_state, OpenAICompatibleProvider(load_config()), broadcast)
     app.router.add_get("/", index)
     app.router.add_get("/ws", websocket_handler)
     app.router.add_get("/api/config", api_config)
